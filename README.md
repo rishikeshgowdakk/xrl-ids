@@ -1,259 +1,213 @@
-# XRL-IDARS: Explainable Reinforcement Learning-Based Intrusion Detection and Autonomous Response System
+# Explainable RL-Based Intrusion Detection and Autonomous Response System (XRL-IDARS)
 
-[![Architecture](https://img.shields.io/badge/Architecture-12--Layer%20Hybrid%20Pipeline-blue.svg)](#3-end-to-end-12-layer-system-architecture)
-[![ML Engine](https://img.shields.io/badge/ML%20Engine-Random%20Forest%20%2B%20LSTM%20Ensemble-green.svg)](#4-machine-learning--deep-learning-subsystems)
-[![XAI](https://img.shields.io/badge/Explainability-SHAP%20Shapley%20Attribution-orange.svg)](#5-explainable-ai-shap-engine)
-[![Autonomous Agent](https://img.shields.io/badge/RL%20Mitigation-Deep%20Q--Network%20(DQN)-red.svg)](#6-deep-q-network-dqn-autonomous-response-agent)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
+## 1. Project Title
+**XRL-IDARS**: Explainable Reinforcement Learning-Based Intrusion Detection and Autonomous Response System.
 
-An enterprise-grade, real-time cyber intrusion detection and autonomous response platform. **XRL-IDARS** bridges the gap between high-accuracy neural threat detection, mathematical explainability, and automated sub-millisecond line-rate mitigation.
+## 2. Project Description
+XRL-IDARS is a comprehensive, AI-driven cybersecurity pipeline designed to monitor local network traffic, detect malicious activity using deep learning, explain the reasoning behind its detections, and autonomously respond to threats. It combines conventional Machine Learning (Random Forest) for broad classification, Deep Learning (LSTM) for temporal anomaly detection, Explainable AI (SHAP) for transparent decision-making, and Reinforcement Learning (DQN) for optimal autonomous firewall mitigation. 
 
----
+## 3. Objectives
+- **Detection**: Accurately classify benign and malicious network flows in real-time.
+- **Explainability**: Provide human-readable, transparent insights (XAI) into why a model flagged a specific flow as malicious.
+- **Autonomy**: Use Reinforcement Learning to determine the most effective mitigation action dynamically, reducing the burden on human analysts.
+- **Observability**: Maintain a modern, responsive SOC (Security Operations Center) dashboard providing real-time metrics, historical databases, and LAN topology analysis.
 
-## Table of Contents
+## 4. Key Features
+- **Real-Time Packet Sniffing**: Uses Python `scapy` to capture live packets and aggregate flow-based features on the fly.
+- **Dual-Model Inference**: Evaluates flows using both a Random Forest Classifier and an LSTM Sequential Anomaly Detector.
+- **SHAP Waterfall Diagnostics**: Transparently details the exact network features (e.g., connection duration, packet size) contributing to the risk score.
+- **DQN Autonomous Agent**: Suggests or enacts firewall rules (ALLOW, ALERT, BLOCK) based on an environment state encompassing risk scores and historical incident counts.
+- **Active LAN Discovery**: Uses root-level `arp-scan` to maintain an active inventory of connected subnets and endpoints.
+- **Live SOC Dashboard**: React/Vite frontend with Server-Sent Events (SSE) for sub-second telemetry visualization.
 
-1. [Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
-2. [Literature Review & Theoretical Grounding](#2-literature-review--theoretical-grounding)
-3. [End-to-End 12-Layer System Architecture](#3-end-to-end-12-layer-system-architecture)
-4. [Machine Learning & Deep Learning Subsystems](#4-machine-learning--deep-learning-subsystems)
-5. [Explainable AI (SHAP) Engine](#5-explainable-ai-shap-engine)
-6. [Deep Q-Network (DQN) Autonomous Response Agent](#6-deep-q-network-dqn-autonomous-response-agent)
-7. [Passive LAN Device Discovery & Hardware Fingerprinting](#7-passive-lan-device-discovery--hardware-fingerprinting)
-8. [Database Architecture & Data Persistence](#8-database-architecture--data-persistence)
-9. [Supported Attack Vectors & Evaluation Metrics](#9-supported-attack-vectors--evaluation-metrics)
-10. [Installation, Setup & Quick Start](#10-installation-setup--quick-start)
-11. [Git Repository Sync Instructions](#11-git-repository-sync-instructions)
+## 5. Architecture
+The system architecture flows as follows:
+1. **Network Interface** -> `scapy_sniffer.py` captures raw traffic and extracts 10-dimensional flow features.
+2. **Feature Payload** -> Sent via HTTP POST to the ML Engine (`/predict`).
+3. **ML Engine (FastAPI)** -> Scales features -> RF predicts class -> LSTM evaluates sequence -> SHAP extracts explanations -> DQN selects action.
+4. **Sniffer Worker** -> Forwards the prediction and features to the Node.js Backend.
+5. **Node Backend** -> Persists the event to PostgreSQL, logs metrics to InfluxDB, and streams data via SSE.
+6. **Frontend Dashboard** -> React application visualizes the attack, displays SHAP values, and updates internal blocklists.
 
----
+## 6. Technology Stack
+- **Frontend**: React 19, TailwindCSS, Vite, Lucide React, Recharts.
+- **Backend**: Node.js (TSX/Express) for orchestration; PostgreSQL & InfluxDB for storage.
+- **ML Engine**: Python 3, FastAPI, Uvicorn, Scikit-Learn, PyTorch, SHAP.
+- **Network Layer**: Scapy, `arp-scan`, `iproute2`.
 
-## 1. Executive Summary & Problem Statement
-
-Modern enterprise and campus local area networks (LANs) face sophisticated, automated, multi-stage cyberattacks ranging from volumetric distributed denial-of-service (DDoS) assaults to stealthy reconnaissance port scans and credential brute forcing. 
-
-Conventional security solutions suffer from three fundamental architectural flaws:
-1. **Signature-Based Inflexibility (e.g., Snort, Suricata)**: Incapable of detecting novel zero-day permutations, polymorphic malware payloads, or behavioral velocity surges.
-2. **The "Black-Box" Interpretability Deficit**: High-accuracy Deep Neural Networks and tree ensembles output threat probabilities without semantic justification, precipitating SOC alert fatigue and analyst distrust.
-3. **Passive Latency & Delayed Response**: Traditional intrusion detection systems rely on human analysts to manually authorize firewall changes, resulting in a Mean Time to Respond (MTTR) of minutes or hours, during which lateral movement occurs.
-
-**XRL-IDARS** resolves these challenges by integrating **Dual-Stream ML/DL Detection**, **Shapley Feature Attribution (SHAP)**, and a **Closed-Loop Deep Q-Network (DQN) Policy Agent** capable of executing autonomous firewall quarantines in **under 7.0 milliseconds**.
-
----
-
-## 2. Literature Review & Theoretical Grounding
-
-| Research Reference | Methodology & Architectures | Primary Contributions | Critical Identified Gaps |
-| :--- | :--- | :--- | :--- |
-| **Nimmagadda & Mehr (2025)**<br>*AI-Driven IDS with Honeypots* | Random Forest, Logistic Regression, Honeypot Ingestion | Analyzed synthetic attack patterns with static tabular machine learning. | Lacks temporal modeling, zero explainability attribution, purely passive. |
-| **Kasongo & Sun (2024)**<br>*Real-Time ML Traffic IDS* | Packet Sniffer + Multi-Class Classifiers | Extracted flow features in near real-time from raw network interfaces. | High false-positive rate under bursty benign traffic; no autonomous remediation. |
-| **Hossain et al. (2025) [Base Reference]**<br>*Deep Q-Network for Adaptive Cybersecurity (Elsevier)* | Deep Q-Network (DQ-IDS) | Implemented adaptive state-action learning for automated cyber mitigation. | Black-box policy decisions; lacks multi-stream temporal inputs and XAI explainability. |
-| **Proposed XRL-IDARS System** | **Hybrid RF + LSTM + SHAP + DQN** | **Dual-stream detection, transparent SHAP attribution, autonomous RL mitigation, real-time LAN device tracker** | **Unifies all four paradigms into an operational, low-latency SOC pipeline.** |
-
----
-
-## 3. End-to-End 12-Layer System Architecture
-
+## 7. Repository Structure
 ```
-[ Layer 1: Network Traffic ]
-   │ Live LAN frames (TCP, UDP, ICMP, HTTP, HTTPS, SSH, DNS)
-   ▼
-[ Layer 2: Packet Capture Engine ]
-   │ Scapy-based sniffer parsing IPv4 headers, ports, flags, payload lengths
-   ▼
-[ Layer 3: Flow Feature Extraction ]
-   │ Sliding window (1.0s) feature aggregation (PPS, Port Count, RST Count, Entropy)
-   ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Dual AI Stream                         │
-│  [ Layer 4: ML Random Forest ]   [ Layer 5: DL LSTM Seq ]   │
-│  (50 Trees static prob P_RF)     (T=5 Recurrent prob P_LSTM)│
-└─────────────────────────────────────────────────────────────┘
-   │                               │
-   └───────────────┬───────────────┘
-                   ▼
-[ Layer 6: Unified Risk Scoring Fusion ]
-   │ Composite Score = w1*P_RF + w2*P_LSTM + Heuristics
-   ▼
-[ Layer 7: Explainable AI (SHAP) ]
-   │ Shapley values φ_i calculating marginal feature contributions
-   ▼
-[ Layer 8: Reinforcement Learning (DQN) ]
-   │ Deep Q-Network evaluating Q(s, ALLOW), Q(s, ALERT), Q(s, BLOCK)
-   ▼
-[ Layer 9: Processing & Control Module ]
-   │ Central orchestrator routing telemetry, logs, and decisions
-   ▼
-┌──────────────────────────────────┬──────────────────────────┐
-│ [ Layer 10: Action Execution ]   │ [ Layer 11: Database ]   │
-│ - Automated Firewall Drops       │ - PostgreSQL Audit Logs  │
-│ - Incident Webhook / SMS / Email │ - InfluxDB Time-Series   │
-└──────────────────────────────────┴──────────────────────────┘
-   │
-   ▼
-[ Layer 12: SOC Monitoring Dashboard ]
-   Real-time Grafana-compliant telemetry visualizer & incident inspector
+.
+├── ml_engine/                # Python backend, ML models, FastAPI routing
+│   ├── api/main.py           # FastAPI server
+│   ├── artifacts/            # Pre-trained models (.joblib, .pt)
+│   ├── models/               # PyTorch and SKLearn model definitions
+│   └── explainability/       # SHAP integration
+├── src/                      # React frontend and Node services
+│   ├── components/           # UI Components (Dashboard, Firewalls, LAN)
+│   └── services/             # Node controllers (controlModule, packetEngine, DBs)
+├── scapy_sniffer.py          # Real-time packet capture daemon
+├── server.ts                 # Node.js API and SSE Stream provider
+├── package.json              # NPM Dependencies
+└── README.md                 # Project Documentation
 ```
 
----
+## 8. Prerequisites
+- **OS**: Linux (Ubuntu 22.04/24.04 recommended). *Windows natively is not supported.*
+- **Node.js**: v20+
+- **Python**: v3.10+
+- **Databases**: PostgreSQL 14+, InfluxDB 1.8+
+- **System Tools**: `arp-scan`, `libpcap-dev`, `iproute2`
 
-## 4. Machine Learning & Deep Learning Subsystems
+## 9. Linux Installation
+1. Clone the repository.
+2. Install system dependencies:
+   ```bash
+   sudo apt-update
+   sudo apt install arp-scan libpcap-dev postgresql influxdb
+   ```
 
-### 4.1. Random Forest Classifier (Static Signature Stream)
-- **Ensemble Configuration**: 50 orthogonal decision trees trained on normalized flow vectors ($x \in \mathbb{R}^8$).
-- **Features Analyzed**: Packets per second, unique destination ports, SYN-to-ACK ratio, RST flag density, average packet size, TCP payload entropy, inter-arrival time jitter.
-- **Output**: Static threat probability $P_{\text{RF}} \in [0.0, 1.0]$.
-- **Benchmark Accuracy**: **98.4%** (Inference Latency: **0.8 ms**).
+## 10. Linux Configuration
+Ensure the network interface you intend to sniff is up and accessible. Identify your primary interface (e.g., `wlo1` or `eth0`) using `ip addr`.
 
-### 4.2. Long Short-Term Memory (LSTM Temporal Sequence Stream)
-- **Recurrent Depth**: Two recurrent LSTM layers ($h_t \in \mathbb{R}^{64}$) over temporal lookback window $T=5$.
-- **Mathematical Formulations**:
+## 11. Linux Permissions
+To execute real-time packet capture and active LAN scans, root privileges are strictly required.
+- `arp-scan` requires CAP_NET_RAW.
+- `scapy_sniffer.py` requires CAP_NET_RAW.
+You must run the Python sniffer with `sudo` or configure Linux capabilities (`setcap cap_net_raw+ep`) for your Python binary and `arp-scan` executable.
 
-$$\begin{aligned}
-f_t &= \sigma(W_f \cdot [h_{t-1}, x_t] + b_f) \quad &&\text{(Forget Gate)} \\
-i_t &= \sigma(W_i \cdot [h_{t-1}, x_t] + b_i) \quad &&\text{(Input Gate)} \\
-\tilde{C}_t &= \tanh(W_c \cdot [h_{t-1}, x_t] + b_c) \quad &&\text{(Candidate Cell State)} \\
-C_t &= f_t \odot C_{t-1} + i_t \odot \tilde{C}_t \quad &&\text{(Updated Cell State)} \\
-o_t &= \sigma(W_o \cdot [h_{t-1}, x_t] + b_o) \quad &&\text{(Output Gate)} \\
-h_t &= o_t \odot \tanh(C_t) \quad &&\text{(Hidden State Vector)}
-\end{aligned}$$
+## 12. Python Virtual Environment
+1. Create a virtual environment: `python3 -m venv .venv`
+2. Activate: `source .venv/bin/activate`
+3. Install requirements: `pip install -r ml_engine/requirements.txt`
 
-- **Sequential Head**: $P_{\text{LSTM}} = \sigma(W_y \cdot h_T + b_y)$.
-- **Benchmark Accuracy**: **96.8%** (Inference Latency: **2.1 ms**).
+## 13. Node.js Setup
+1. Install dependencies: `npm install`
+2. Set up environment variables (see Section 17).
 
-### 4.3. Bayesian Unified Risk Fusion
-$$\text{Composite Risk Score} = 0.45 \cdot P_{\text{RF}} + 0.40 \cdot P_{\text{LSTM}} + 0.15 \cdot \text{Heuristic Anomaly Index}$$
+## 14. PostgreSQL Setup
+1. Start PostgreSQL: `sudo systemctl start postgresql`
+2. Create database: `createdb xrl_idars` (or configure via `.env`).
+The backend (`server.ts`) will automatically initialize the schema on boot.
 
----
+## 15. InfluxDB Setup
+1. Start InfluxDB: `sudo systemctl start influxdb`
+2. The Python sniffer will automatically attempt to create the `xrl_idars` database and write telemetry metrics.
 
-## 5. Explainable AI (SHAP) Engine
+## 16. ML Model/Artifact Requirements
+The following pre-trained artifacts must reside in `ml_engine/artifacts/`:
+- `rf_model.joblib`
+- `scaler.joblib`
+- `shap_background.joblib`
+- `dqn_model.pt`
+- `lstm_model.pt`
+*(Do not boot the ML API without these files).*
 
-To eliminate black-box opacity, the SHAP engine calculates the exact marginal contribution $\phi_i$ of each network flow feature using Shapley coalition theory:
+## 17. Environment Variables
+Create a `.env` file in the root directory:
+```
+DB_USER=postgres
+DB_HOST=127.0.0.1
+DB_NAME=xrl_idars
+DB_PASSWORD=yourpassword
+DB_PORT=5432
+INFLUX_HOST=127.0.0.1
+```
 
-$$\phi_i(x) = \sum_{S \subseteq F \setminus \{i\}} \frac{|S|!(|F| - |S| - 1)!}{|F|!} \left[ f_x(S \cup \{i\}) - f_x(S) \right]$$
-
-### Additive Efficiency Guarantee
-$$f(x) = \phi_0 + \sum_{i=1}^{M} \phi_i(x)$$
-*(Where $\phi_0 = \mathbb{E}[f(x)] = 0.08$ represents the baseline expected value of benign traffic).*
-
-### Generated Root-Cause Narrative Example
-> *"Anomalous TCP SYN rate (Packets/Sec = 1420, $\phi = +0.42$) and zero ACK completions ($\phi = +0.28$) pushed risk score to 96.2%, matching DoS SYN Flood profile."*
-
----
-
-## 6. Deep Q-Network (DQN) Autonomous Response Agent
-
-The reinforcement learning agent maps network state vectors directly to defensive policy actions without human intervention:
-
-### State Vector Representation ($s_t$)
-$$s_t = \Big[ \text{Risk Score},\, \max_i(\phi_i),\, \text{Flow Velocity (PPS)},\, \text{Historical Violations},\, \text{Quarantine Status} \Big]$$
-
-### Action Space ($\mathcal{A}$)
-$$\mathcal{A} = \{0: \text{ALLOW},\; 1: \text{ALERT},\; 2: \text{BLOCK}\}$$
-
-### Bellman Optimality Formulation
-$$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left[ r_{t+1} + \gamma \max_{a \in \mathcal{A}} Q(s_{t+1}, a) - Q(s_t, a_t) \right]$$
-
-### Reward Function Matrix
-| Execution Outcome | Policy Reward | Rationale |
-| :--- | :--- | :--- |
-| **True Positive Attack Block ($r_{\text{TP}}$)** | **$+10.0$ pts** | Mitigates security compromise immediately. |
-| **True Negative Benign Allow ($r_{\text{TN}}$)** | **$+5.0$ pts** | Preserves uninterrupted legitimate throughput. |
-| **False Positive User Block ($r_{\text{FP}}$)** | **$-18.0$ pts** | Penalizes legitimate business disruption. |
-| **False Negative Attack Pass ($r_{\text{FN}}$)** | **$-25.0$ pts** | Maximum penalty for undetected intrusion breach. |
-| **Suspicious Alert Dispatched** | **$+2.0$ pts** | Proactive warning for anomalous borderline flows. |
-
----
-
-## 7. Passive LAN Device Discovery & Hardware Fingerprinting
-
-The system provides passive asset identification for all connected hosts on the local network:
-- **Phone Model Identification**: Infers device models (e.g. Apple iPhone 15 Pro, Samsung Galaxy S24, Google Pixel 8) via DHCP option signatures and mDNS broadcast advertisements.
-- **Hardware MAC Vendor OUI Lookup**: Queries IEEE OUI registries to resolve network interface card manufacturers (Apple, Samsung, Intel, TP-Link, LG, Sony).
-- **TCP/IP Stack OS Fingerprinting**: Inspects Initial TTL (Time To Live) flags and TCP Window Size parameters (e.g. $\text{TTL}=64$ for iOS/Linux/Android, $\text{TTL}=128$ for Windows 11).
-- **Subnet Configuration & Scanning**: Supports custom home and enterprise subnets (`192.168.1.0/24`, `192.168.0.0/24`, `10.0.0.0/24`, `172.16.0.0/24`).
-
----
-
-## 8. Database Architecture & Data Persistence
-
-### 8.1. PostgreSQL Relational Model (Audit Trail & Incident State)
-- `security_incidents`: Detailed attack log (`id`, `timestamp`, `source_ip`, `dest_ip`, `protocol`, `attack_type`).
-- `ml_inferences`: Static and recurrent scores (`rf_prob`, `lstm_prob`, `fused_risk_score`).
-- `xai_attributions`: Shapley vectors (`pps_shap`, `port_shap`, `rst_shap`, `syn_shap`, `narrative`).
-- `rl_actions`: Policy execution log (`q_allow`, `q_alert`, `q_block`, `chosen_action`, `reward`).
-- `firewall_rules`: Active iptables/NFTables rules (`ip_address`, `status`, `packets_dropped`, `expires_at`).
-
-### 8.2. InfluxDB Time-Series Model (High-Velocity Telemetry)
-- `network_throughput`: Real-time packet throughput (`packets_per_sec`, `bytes_per_sec`).
-- `threat_metrics`: Rolling risk index, anomaly velocity, active blocked host count.
-
----
-
-## 9. Supported Attack Vectors & Evaluation Metrics
-
-| Attack Classification | Signatures & Detection Mechanism | Fused Detection Accuracy |
-| :--- | :--- | :--- |
-| **DoS / DDoS TCP SYN Flood** | Rapid stream of SYN packets with zero ACKs; SYN:ACK ratio $> 5:1$. | 99.4% |
-| **Nmap Reconnaissance Port Scan** | Rapid probe of $15+$ distinct destination ports in $< 1.0$s. | 98.9% |
-| **SSH Dictionary Brute Force** | High-frequency authentication cycles on port 22 with RST spikes. | 99.1% |
-| **ICMP Ping of Death Flood** | High-bandwidth oversized ICMP echo requests; anomalous protocol entropy. | 98.7% |
-| **Malware C2 Beaconing** | Periodic fixed-interval transmissions with high payload byte entropy. | 97.9% |
-| **Benign Web / Office Traffic** | Standard TLS 1.3 handshakes, HTTPS, DNS lookups, video streams. | 99.6% |
-
----
-
-## 10. Installation, Setup & Quick Start
-
-### Prerequisites
-- Node.js 18.x or higher
-- npm 9.x or higher
-
-### Installation
+## 18. How to start ML engine
 ```bash
-# Clone the repository
-git clone https://github.com/sharanyam26/Intrusion-Detection-System.git
-cd Intrusion-Detection-System
-
-# Install project dependencies
-npm install
+source .venv/bin/activate
+uvicorn ml_engine.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Running the System
+## 19. How to start Node/backend/frontend
 ```bash
-# Start development server
 npm run dev
-
-# Build for production
-npm run build
 ```
+*(This launches `tsx server.ts` and the Vite dev server).*
 
----
+## 20. How to verify services
+- Node Health: `curl http://127.0.0.1:3000/api/health`
+- ML Health: `curl http://127.0.0.1:8000/health` (Ensure all models show `loaded: true`).
 
-## 11. Git Repository Sync Instructions
+## 21. How to run LAN discovery
+Navigate to the "LAN Network & Device Manager" in the UI and click "Scan Subnet".
+This sends a request to `/api/lan-devices`, which executes `sudo -n arp-scan --localnet` on the backend. **It will fail if you have not configured passwordless sudo or capabilities for arp-scan.**
 
-To push the complete codebase and documentation to your GitHub repository (`https://github.com/sharanyam26/Intrusion-Detection-System`):
+## 22. How packet capture works
+`scapy_sniffer.py` uses `libpcap` to asynchronously capture packets on the specified interface (`-i wlo1`). It maintains stateful flows (source, dest, ports, protocol) and calculates per-second metrics (pps, bps, flags) which are bundled into JSON payloads.
 
+## 23. How ML inference works
+The Python script sends the JSON payload to the ML FastAPI `/predict` route. 
+The API transforms the dictionary into a scaled numpy array, passes it to the Random Forest model for classification probabilities, and evaluates the last 5 sequences against the PyTorch LSTM model.
+
+## 24. How SHAP works
+The `SHAPEngine` maintains a KernelExplainer initialized with a background dataset (`shap_background.joblib`). When an inference occurs, it calculates the marginal contribution of each feature (e.g., how much `flow_duration_ms` increased the risk probability).
+
+## 25. How DQN works
+The Reinforcement Learning agent ingests an environment state containing the current Risk Score, LSTM score, incident history, and packet velocity. It queries a neural network (`dqn_model.pt`) to evaluate Q-values for three discrete actions: ALLOW, ALERT, BLOCK, selecting the optimal mitigation strategy.
+
+## 26. How firewall response works
+Currently, action blocks are managed via an application-layer blocklist in `controlModule.ts`. When the DQN recommends BLOCK, the IP is added to the internal active blocklist, dropping simulated internal UI traffic and dispatching an alert to the dashboard. *(OS-level `iptables` integration is planned for the future).*
+
+## 27. API endpoints
+**Node.js (Port 3000)**
+- `GET /api/health`: Validates Node server status.
+- `GET /api/lan-devices`: Executes native `arp-scan` and returns discovered endpoints.
+- `GET /api/packets/stream`: Provides a continuous Server-Sent Events (SSE) stream of processed packets.
+- `POST /api/internal/packet`: Webhook allowing the Python sniffer to inject packet results into the Node SSE stream.
+- `POST /api/db/events`: Writes a finalized security event to PostgreSQL.
+
+**ML Engine (Port 8000)**
+- `GET /health`: Validates ML artifact loading status.
+- `POST /predict`: Ingests flow features/sequences and returns RF, LSTM, SHAP, and DQN outputs.
+
+## 28. Database information
+- **PostgreSQL**: Stores long-term structured security events (IPs, Predictions, Actions taken).
+- **InfluxDB**: Stores highly volatile, real-time time-series telemetry (packets/sec, block/attack ratios) updated continuously by the sniffer daemon.
+
+## 29. Troubleshooting
+- **LAN Scan Fails**: Ensure `arp-scan` is installed and you can run `sudo -n arp-scan --localnet` without being prompted for a password.
+- **ML API 500 Errors**: Ensure your Python version matches the artifacts, and all `.joblib` and `.pt` files exist in `ml_engine/artifacts/`.
+- **No Packets in UI**: Ensure `scapy_sniffer.py` is actively running with root privileges on an interface currently receiving traffic.
+
+## 30. Windows installation
+**Native Windows installation is NOT supported.** The backend architecture relies heavily on Linux-specific networking tools, routing tables, and ARP implementations.
+
+## 31. Windows limitations
+- `arp-scan` is not natively available or reliable on Windows.
+- `ip route` and Linux network interface parsing (e.g., `wlo1`) fail on Windows.
+- `scapy` requires installing Npcap or WinPcap, and behaves differently at the socket level.
+- Sudo/privilege escalation logic implemented in the backend will fail.
+
+## 32. Linux vs Windows differences
+If attempting to develop the UI on Windows, you must rely exclusively on the `AttackSimulator.tsx` (mock data generation) as live sniffing and LAN active probing will fail. It is highly recommended to use WSL2 (Windows Subsystem for Linux), though WSL2 presents significant challenges bridging physical network interfaces for promiscuous mode sniffing.
+
+## 33. Security/privilege requirements
+Do **not** run the Node.js server as root. Instead, grant specific capabilities to `arp-scan` and the Python binary:
 ```bash
-# Initialize git (if not already initialized)
-git init
-
-# Add all files to the staging index
-git add .
-
-# Create initial commit
-git commit -m "feat: complete XRL-IDARS intrusion detection and autonomous response system"
-
-# Set main branch
-git branch -M main
-
-# Link remote repository
-git remote add origin https://github.com/sharanyam26/Intrusion-Detection-System.git
-
-# Push to GitHub
-git push -u origin main --force
+sudo setcap cap_net_raw+ep /usr/sbin/arp-scan
+sudo setcap cap_net_raw+ep /path/to/.venv/bin/python
 ```
+This follows the principle of least privilege while enabling necessary low-level network access.
 
----
+## 34. Development workflow
+1. Edit React components in `src/components/`.
+2. Edit Node APIs in `server.ts` or `src/services/`.
+3. Edit ML routing in `ml_engine/api/main.py`.
+4. Hot-reloading is handled by Vite for the frontend. You must restart the Node backend or Uvicorn server for backend changes.
 
-## License
+## 35. Testing
+The project currently relies on manual End-to-End validation. Run `npm run lint` and `npx tsc --noEmit` to validate TypeScript interfaces before committing.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 36. Project status
+The project is structurally complete. Real-time packet capture, inference, XAI explanations, LAN discovery, and database logging are functionally integrated. A full No-Mock UI audit is currently underway to strip out legacy simulator fallbacks.
+
+## 37. Known limitations
+- Automated OS-level firewall execution (`iptables`/`nftables`) is not yet invoked by the DQN agent.
+- `AttackSimulator.tsx` mock-generators are still present in the UI codebase pending a final clean-up.
+
+## 38. Future work
+- Integration of DQN outputs directly into Linux `iptables` for true autonomous mitigation.
+- Enhancing LSTM to evaluate variable-length sequences dynamically.
+- Transitioning the UI blocklist to pull historical blocks directly from PostgreSQL on boot.
