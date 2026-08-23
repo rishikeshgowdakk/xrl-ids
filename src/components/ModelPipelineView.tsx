@@ -4,15 +4,17 @@ import { ProcessedSecurityEvent } from '../types';
 
 interface ModelPipelineViewProps {
   events: ProcessedSecurityEvent[];
+  selectedEvent: ProcessedSecurityEvent | null;
+  onSelectEvent: (event: ProcessedSecurityEvent) => void;
 }
 
-export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events }) => {
-  const latestEvent = events.length > 0 ? events[0] : null;
-  const realFeatures = latestEvent?.realFeatures;
-  const rfProb = latestEvent?.realPrediction?.probabilities ? Math.max(...latestEvent.realPrediction.probabilities) : 0;
-  const lstmProb = latestEvent?.realPrediction?.lstm?.anomaly_score || 0;
-  const riskScore = latestEvent?.realPrediction?.risk_score || 0;
-  const classProbabilities = latestEvent?.realPrediction?.probabilities || [0, 0, 0, 0];
+export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events, selectedEvent, onSelectEvent }) => {
+  const currentEvent = selectedEvent || (events.length > 0 ? events[0] : null);
+  const realFeatures = currentEvent?.realFeatures;
+  const rfProb = currentEvent?.realPrediction?.probabilities ? Math.max(...currentEvent.realPrediction.probabilities) : 0;
+  const lstmProb = currentEvent?.realPrediction?.lstm?.anomaly_score || 0;
+  const riskScore = currentEvent?.realPrediction?.risk_score || 0;
+  const classProbabilities = currentEvent?.realPrediction?.probabilities || [0, 0, 0, 0];
   
   // Assuming probabilities array maps to: ['BENIGN', 'DOS_SYN_FLOOD', 'PORT_SCAN', 'BRUTE_FORCE'] based on standard mapping
   const classNames = ['BENIGN', 'DOS_SYN_FLOOD', 'PORT_SCAN', 'BRUTE_FORCE'];
@@ -20,6 +22,14 @@ export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events }) 
   classProbabilities.forEach((p, idx) => {
     probMap[classNames[idx] || `Class_${idx}`] = p;
   });
+
+  if (!currentEvent) {
+    return (
+      <div className="p-12 text-center text-slate-500 bg-white rounded-xl border border-slate-200">
+        No security events recorded yet. Generate or stream traffic to inspect the ML pipeline.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -39,13 +49,51 @@ export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events }) 
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-center">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-medium">Inspect Event:</span>
+              <select
+                value={currentEvent.id}
+                onChange={(e) => {
+                  const found = events.find(ev => ev.id === e.target.value);
+                  if (found) onSelectEvent(found);
+                }}
+                className="bg-slate-50 border border-slate-200 text-xs text-slate-900 rounded-md px-3 py-1.5 focus:outline-none focus:border-slate-400"
+              >
+                {events.slice(0, 15).map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {new Date(ev.timestamp).toLocaleTimeString()} - {ev.attackType} ({ev.sourceIp})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-center hidden md:block">
               <span className="text-[11px] text-slate-500 block">ML Benchmark (RF)</span>
               <span className="text-lg font-bold text-slate-900 font-mono">98.4% Acc</span>
             </div>
-            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-center">
+            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-center hidden md:block">
               <span className="text-[11px] text-slate-500 block">DL Benchmark (LSTM)</span>
               <span className="text-lg font-bold text-slate-900 font-mono">96.8% Acc</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Selected Event Context Ribbon */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 mb-1">Currently Inspecting Event</h3>
+          <p className="text-xs text-slate-500">These ML results correspond to the network flow shown above.</p>
+        </div>
+        <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 px-4 py-3 rounded-lg text-sm text-slate-800">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 font-mono">
+              <span className="font-semibold">{currentEvent.sourceIp}:{currentEvent.rawPacket?.sourcePort || currentEvent.realFlow?.source_port || 'ANY'}</span>
+              <span className="text-slate-400">→</span>
+              <span className="font-semibold">{currentEvent.destinationIp}:{currentEvent.rawPacket?.destinationPort || currentEvent.realFlow?.destination_port || 'ANY'}</span>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-mono text-slate-500">
+              <span>Protocol: {currentEvent.protocol}</span>
+              <span>Timestamp: {new Date(currentEvent.timestamp).toISOString()}</span>
             </div>
           </div>
         </div>
@@ -145,7 +193,7 @@ export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events }) 
                 <div className="mt-2 flex items-center gap-2 text-xs">
                   <span className="text-slate-500">Class:</span>
                   <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-semibold font-mono">
-                    {latestEvent?.realPrediction?.prediction || 'BENIGN'}
+                    {currentEvent?.realPrediction?.prediction || 'BENIGN'}
                   </span>
                 </div>
               </div>
@@ -205,7 +253,7 @@ export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events }) 
                 <div className="mt-2 flex items-center gap-2 text-xs">
                   <span className="text-slate-500">Status:</span>
                   <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-semibold font-mono">
-                    {latestEvent?.realPrediction?.lstm?.status || 'N/A'}
+                    {currentEvent?.realPrediction?.lstm?.status || 'N/A'}
                   </span>
                 </div>
               </div>

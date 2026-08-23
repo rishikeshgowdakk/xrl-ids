@@ -67,7 +67,13 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'models' && <ModelPipelineView events={events} />}
+        {activeTab === 'models' && (
+          <ModelPipelineView
+            events={events}
+            selectedEvent={selectedEvent}
+            onSelectEvent={(ev) => setSelectedEvent(ev)}
+          />
+        )}
 
         {activeTab === 'xai' && (
           <XaiExplanationView
@@ -77,7 +83,13 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'rl' && <RlDqnView events={events} />}
+        {activeTab === 'rl' && (
+          <RlDqnView
+            events={events}
+            selectedEvent={selectedEvent}
+            onSelectEvent={(ev) => setSelectedEvent(ev)}
+          />
+        )}
 
         {activeTab === 'firewall' && (
           <FirewallActionView

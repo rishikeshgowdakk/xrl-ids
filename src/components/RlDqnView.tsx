@@ -16,12 +16,22 @@ import { DQNState, ActionType, ProcessedSecurityEvent } from '../types';
 
 interface RlDqnViewProps {
   events: ProcessedSecurityEvent[];
+  selectedEvent: ProcessedSecurityEvent | null;
+  onSelectEvent: (event: ProcessedSecurityEvent) => void;
 }
 
-export const RlDqnView: React.FC<RlDqnViewProps> = ({ events }) => {
+export const RlDqnView: React.FC<RlDqnViewProps> = ({ events, selectedEvent, onSelectEvent }) => {
   
-  const latestEvent = events.length > 0 ? events[0] : null;
-  const dqnData = latestEvent?.realPrediction?.dqn;
+  const currentEvent = selectedEvent || (events.length > 0 ? events[0] : null);
+  const dqnData = currentEvent?.realPrediction?.dqn;
+
+  if (!currentEvent) {
+    return (
+      <div className="p-12 text-center text-slate-500 bg-white rounded-xl border border-slate-200">
+        No security events recorded yet. Generate or stream traffic to inspect the RL agent.
+      </div>
+    );
+  }
 
 
 
@@ -42,6 +52,24 @@ export const RlDqnView: React.FC<RlDqnViewProps> = ({ events }) => {
               Based on base paper <em>M. A. Hossain et al., Elsevier ICT Express (2025)</em>. The RL agent dynamically maps composite risk, SHAP feature impact, and flow history to autonomous actions: <strong>ALLOW (0)</strong>, <strong>ALERT (1)</strong>, or <strong>BLOCK (2)</strong>.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Inspect Event:</span>
+            <select
+              value={currentEvent.id}
+              onChange={(e) => {
+                const found = events.find(ev => ev.id === e.target.value);
+                if (found) onSelectEvent(found);
+              }}
+              className="bg-slate-50 border border-slate-200 text-xs text-slate-900 rounded-md px-3 py-1.5 focus:outline-none focus:border-slate-400"
+            >
+              {events.slice(0, 15).map(ev => (
+                <option key={ev.id} value={ev.id}>
+                  {new Date(ev.timestamp).toLocaleTimeString()} - {ev.attackType} ({ev.sourceIp})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -57,15 +85,17 @@ export const RlDqnView: React.FC<RlDqnViewProps> = ({ events }) => {
 
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-slate-700">Latest Event IP</span>
-              <span className="font-mono text-slate-900 font-bold">{latestEvent?.sourceIp || 'N/A'}</span>
+              <span className="text-slate-700">Selected Flow</span>
+              <span className="font-mono text-slate-900 font-bold">
+                {currentEvent?.sourceIp ? `${currentEvent.sourceIp} → ${currentEvent.destinationIp}` : 'N/A'}
+              </span>
             </div>
           </div>
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-700">Unified Risk Score</span>
               <span className="font-mono text-slate-900 font-bold">
-                {latestEvent ? (latestEvent.realPrediction?.risk_score * 100).toFixed(0) + '%' : 'N/A'}
+                {currentEvent ? (currentEvent.realPrediction?.risk_score * 100).toFixed(0) + '%' : 'N/A'}
               </span>
             </div>
           </div>
@@ -73,14 +103,14 @@ export const RlDqnView: React.FC<RlDqnViewProps> = ({ events }) => {
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-700">Top SHAP Feature</span>
               <span className="font-mono text-slate-900 font-bold">
-                {latestEvent?.realPrediction?.shap?.features?.[0]?.feature || 'N/A'}
+                {currentEvent?.realPrediction?.shap?.features?.[0]?.feature || 'N/A'}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-slate-700">Current Action Executed</span>
             <span className="px-3 py-1 rounded text-xs font-mono transition border bg-slate-50 text-slate-700 border-slate-200">
-              {latestEvent?.actionExecuted || 'N/A'}
+              {currentEvent?.actionExecuted || 'N/A'}
             </span>
           </div>
         </div>
