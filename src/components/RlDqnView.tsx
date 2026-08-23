@@ -112,11 +112,33 @@ export const RlDqnView: React.FC<RlDqnViewProps> = ({ events, selectedEvent, onS
               </span>
             </div>
           </div>
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-xs text-slate-700">Current Action Executed</span>
-            <span className="px-3 py-1 rounded text-xs font-mono transition border bg-slate-50 text-slate-700 border-slate-200">
-              {currentEvent?.actionExecuted || 'N/A'}
-            </span>
+          <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-700">Execution Status</span>
+              <span className={`px-3 py-1 rounded text-xs font-mono font-bold transition border ${
+                currentEvent?.executionStatus === 'SIMULATED' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                currentEvent?.executionStatus === 'FAILED' ? 'bg-rose-100 text-rose-800 border-rose-300' :
+                currentEvent?.executionStatus === 'SUCCESS' && currentEvent?.actionExecuted === 'BLOCK' ? 'bg-rose-600 text-white border-rose-700' :
+                currentEvent?.executionStatus === 'SUCCESS' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                'bg-slate-50 text-slate-700 border-slate-200'
+              }`}>
+                {currentEvent?.actionExecuted === 'BLOCK' ? 
+                  (currentEvent?.executionStatus === 'SIMULATED' ? 'BLOCK SIMULATED' : 
+                   currentEvent?.executionStatus === 'FAILED' ? 'BLOCK FAILED' : 
+                   currentEvent?.executionStatus === 'SUCCESS' ? 'BLOCK EXECUTED' : 'BLOCK') :
+                 (currentEvent?.actionExecuted || 'N/A')}
+              </span>
+            </div>
+            {currentEvent?.executionError && (
+              <div className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded border border-rose-100">
+                {currentEvent.executionError}
+              </div>
+            )}
+            {currentEvent?.firewallRuleId && (
+              <div className="text-[10px] text-slate-500 font-mono">
+                Rule ID: {currentEvent.firewallRuleId}
+              </div>
+            )}
           </div>
         </div>
 

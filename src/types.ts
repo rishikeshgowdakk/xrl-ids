@@ -231,6 +231,10 @@ export interface ProcessedSecurityEvent {
   alertDispatched: boolean;
   alertChannels?: ('EMAIL' | 'SMS' | 'WEBHOOK' | 'SOC_DASHBOARD')[];
   eventMode?: 'live' | 'simulation';
+  executionStatus?: string;
+  executionMode?: string;
+  firewallRuleId?: string;
+  executionError?: string;
 }
 
 export interface FirewallRule {

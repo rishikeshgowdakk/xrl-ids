@@ -68,7 +68,7 @@ export class ProcessingControlModule {
     const isIpBlocked = this.isIpBlocked(combinedEvent.flow.source_ip);
     const prediction = combinedEvent.prediction;
     const features = combinedEvent.features;
-    
+
     // Parse actions from DQN
     let actionExecuted: ActionType = prediction.dqn ? prediction.dqn.action : 'ALLOW';
     let alertDispatched = false;
@@ -137,7 +137,7 @@ export class ProcessingControlModule {
    */
   public async processIncomingPacket(packet: RawPacket): Promise<ProcessedSecurityEvent | null> {
     const flowFeatures = packetEngine.extractFlowFeatures(packet);
-    
+
     // Map to real python features format
     const pyFeatures = {
       flow_duration_ms: flowFeatures.connectionDurationMs,
@@ -163,7 +163,7 @@ export class ProcessingControlModule {
           env_state: { historical_incident_count: 0, is_blocked: 0 }
         })
       });
-      
+
       if (response.ok) {
         const prediction = await response.json();
         return this.processPredictionEvent({
@@ -185,7 +185,7 @@ export class ProcessingControlModule {
     } catch (e) {
       console.error("Failed to process simulated packet through real API:", e);
     }
-    
+
     return null;
   }
 
@@ -208,15 +208,15 @@ export class ProcessingControlModule {
       };
       this.timeSeriesData = [...this.timeSeriesData.slice(0, -1), updatedLatest];
     } else {
-        const newPoint: TimeSeriesPoint = {
-          time: timeStr,
-          timestamp: event.timestamp,
-          packetsPerSec: event.realFeatures?.flow_packets_per_s || (event.flowFeatures?.packetsPerSecond || 0),
-          riskScore: event.realPrediction?.risk_score || (event.riskScore?.finalScore || 0),
-          attacksCount: isAttack ? 1 : 0,
-          blockedCount: isBlocked ? 1 : 0,
-          normalCount: isAttack ? 0 : 1
-        };
+      const newPoint: TimeSeriesPoint = {
+        time: timeStr,
+        timestamp: event.timestamp,
+        packetsPerSec: event.realFeatures?.flow_packets_per_s || (event.flowFeatures?.packetsPerSecond || 0),
+        riskScore: event.realPrediction?.risk_score || (event.riskScore?.finalScore || 0),
+        attacksCount: isAttack ? 1 : 0,
+        blockedCount: isBlocked ? 1 : 0,
+        normalCount: isAttack ? 0 : 1
+      };
       const updated = [...this.timeSeriesData, newPoint];
       if (updated.length > this.maxTimeSeriesPoints) {
         this.timeSeriesData = updated.slice(updated.length - this.maxTimeSeriesPoints);
@@ -279,14 +279,14 @@ export class ProcessingControlModule {
   public startTrafficEngine(): void {
     if (this.sseSource) return; // Already running
     this.isLiveRunning = true;
-    
+
     this.sseSource = new EventSource('/api/packets/stream');
     this.sseSource.onmessage = (event) => {
       if (!this.isLiveRunning) return;
-      
+
       try {
         const pkt = JSON.parse(event.data);
-        
+
         if (pkt.type === 'prediction') {
           this.processPredictionEvent(pkt);
         } else if (pkt.id && pkt.sourceIp) {
@@ -312,7 +312,7 @@ export class ProcessingControlModule {
         console.error('Failed to parse real packet from stream:', err);
       }
     };
-    
+
     this.sseSource.onerror = (err) => {
       console.error('SSE Error:', err);
       this.stopTrafficEngine();
@@ -370,7 +370,7 @@ export class ProcessingControlModule {
   public getConnectedDevices(): DeviceInfo[] {
     const homeDevices = lanDeviceManager.getAllDevices();
     const devicesMap = new Map<string, DeviceInfo>();
-    
+
     // Add home devices registry
     homeDevices.forEach(d => {
       devicesMap.set(d.ipAddress, { ...d });

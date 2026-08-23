@@ -6,8 +6,9 @@ import { exec, spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
 import os from 'os';
-import { initializeDatabase, checkDatabaseHealth, saveSecurityEventToDb } from './src/services/postgres.js';
+import { initializeDatabase, checkDatabaseHealth, saveSecurityEventToDb, getRecentActions } from './src/services/postgres.js';
 import { initializeInfluxDB } from './src/services/influxdb.js';
+import { actionExecutor } from './src/services/actionExecutor.js';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -47,30 +48,39 @@ function getWifiInfo(): { prefix: string | null; iface: string; hostIp: string |
 }
 
 function startPacketCapture(forceRestart = false) {
-  if (snifferProcess) {
-    if (!forceRestart && !snifferProcess.killed) {
-      return; // Already running
-    }
-    snifferProcess.kill();
-    snifferProcess = null;
+  if (snifferProcess && !snifferProcess.killed) {
+    console.log('[Packet Capture] Sniffer is already running, preventing duplicate instance.');
+    return;
   }
 
-  const { iface } = getWifiInfo();
+  const { iface, hostIp } = getWifiInfo();
   
   // Construct BPF filter for tracked IPs
   let filter = '';
-  if (trackedDevices.length > 0) {
-    filter = trackedDevices.map(ip => `host ${ip}`).join(' or ');
+  if (trackedDevices && trackedDevices.length > 0) {
+    const filterIps = new Set(trackedDevices);
+    if (hostIp) {
+      filterIps.add(hostIp);
+    }
+    filter = Array.from(filterIps).map(ip => `host ${ip}`).join(' or ');
   }
 
   // Use Python Scapy script for packet capture
   const scapyScript = path.join(process.cwd(), 'scapy_sniffer.py');
-  const args = ['python3', scapyScript, '-i', iface];
+  const pythonPath = path.join(process.cwd(), '.venv', 'bin', 'python');
+
+  const args = [pythonPath, scapyScript, '-i', iface];
+
   if (filter) {
     args.push('-f', filter);
+    console.log(`[Packet Capture] Starting filtered capture on ${iface}: ${filter}`);
+  } else {
+    console.log(`[Packet Capture] Starting unfiltered capture on ${iface}.`);
   }
 
-  snifferProcess = spawn('sudo', args);
+  // Use non-interactive sudo so the process never prompts for a password.
+  // The exact pythonPath is permitted by the project's sudoers NOPASSWD rule.
+  snifferProcess = spawn('sudo', ['-n', ...args]);
   
   snifferProcess.stdout?.on('data', (data: Buffer) => {
     const lines = data.toString().split('\n');
@@ -100,8 +110,6 @@ function startPacketCapture(forceRestart = false) {
     console.log(`[Scapy Sniffer] python process exited with code ${code}`);
     snifferProcess = null;
   });
-
-  console.log(`[Packet Capture] Started real-time Scapy python sniffer on ${iface}${filter ? ' with filter' : ''}.`);
 }
 
 
@@ -133,11 +141,38 @@ async function startServer() {
 
   app.post('/api/db/events', async (req, res) => {
     try {
-      await saveSecurityEventToDb(req.body);
+      const event = req.body;
+      const dqnAction = event.realPrediction?.dqn?.action || event.actionExecuted || 'ALLOW';
+      const sourceIp = event.sourceIp || event.source_ip;
+      
+      if (sourceIp) {
+        const executionResult = await actionExecutor.executeAction(dqnAction, sourceIp);
+        
+        event.executionStatus = executionResult.status;
+        event.executionMode = executionResult.mode;
+        event.firewallRuleId = executionResult.ruleId;
+        event.executionError = executionResult.errorMessage;
+        
+        if (executionResult.action === 'BLOCK' && executionResult.status !== 'FAILED') {
+          event.isBlocked = true;
+        }
+      }
+      
+      await saveSecurityEventToDb(event);
       res.status(201).json({ status: 'success' });
     } catch (err) {
+      console.error('Failed to save event:', err);
       // Don't crash on DB error, just log it. The frontend handles errors gracefully.
       res.status(500).json({ status: 'error', error: 'Failed to save event' });
+    }
+  });
+
+  app.get('/api/actions', async (req, res) => {
+    try {
+      const actions = await getRecentActions();
+      res.json(actions);
+    } catch (err) {
+      res.status(500).json({ status: 'error', error: 'Failed to fetch actions' });
     }
   });
 
@@ -160,6 +195,42 @@ async function startServer() {
 
   app.post('/api/ml/predict', async (req, res) => {
     try {
+      const FEATURE_SCHEMA = [
+        "flow_duration_ms",
+        "flow_packets_per_s",
+        "flow_bytes_per_s",
+        "packet_length_mean",
+        "packet_length_std",
+        "syn_count",
+        "ack_count",
+        "rst_count",
+        "fin_count",
+        "syn_ack_ratio"
+      ];
+
+      if (!req.body || !req.body.features) {
+        console.error(`[ML Proxy] Validation error: Missing features object`);
+        return res.status(400).json({ error: 'Missing features object' });
+      }
+
+      const missingFeatures: string[] = [];
+      const invalidFeatures: string[] = [];
+
+      for (const feature of FEATURE_SCHEMA) {
+        const val = req.body.features[feature];
+        if (val === undefined || val === null) {
+          missingFeatures.push(feature);
+        } else if (typeof val !== 'number' || !Number.isFinite(val)) {
+          invalidFeatures.push(feature);
+        }
+      }
+
+      if (missingFeatures.length > 0 || invalidFeatures.length > 0) {
+        const errorMsg = `Validation failed. Missing: ${missingFeatures.join(', ')}. Invalid/Non-numeric: ${invalidFeatures.join(', ')}`;
+        console.error(`[ML Proxy] Validation error: ${errorMsg}`);
+        return res.status(400).json({ error: errorMsg });
+      }
+
       const response = await fetch('http://127.0.0.1:8000/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,6 +238,8 @@ async function startServer() {
       });
       
       if (!response.ok) {
+        const errorBody = await response.text();
+        console.error(`[ML Proxy] /predict failed: ${response.status} ${errorBody}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();

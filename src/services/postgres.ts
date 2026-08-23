@@ -43,6 +43,10 @@ export async function initializeDatabase() {
         event_mode VARCHAR(20),
         raw_features JSONB,
         raw_prediction JSONB,
+        execution_status VARCHAR(20),
+        execution_mode VARCHAR(20),
+        firewall_rule_id VARCHAR(100),
+        execution_error TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -92,8 +96,9 @@ export async function saveSecurityEventToDb(event: ProcessedSecurityEvent) {
         id, timestamp, flow_id, source_ip, destination_ip, protocol, attack_type, 
         risk_score, rf_probability, lstm_anomaly_score, dqn_action, q_allow, 
         q_alert, q_block, action_executed, is_blocked, alert_dispatched, 
-        event_mode, raw_features, raw_prediction
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+        event_mode, raw_features, raw_prediction,
+        execution_status, execution_mode, firewall_rule_id, execution_error
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
       [
         event.id,
         event.timestamp,
@@ -114,7 +119,11 @@ export async function saveSecurityEventToDb(event: ProcessedSecurityEvent) {
         event.alertDispatched,
         event.eventMode || 'live',
         JSON.stringify(event.realFeatures || {}),
-        JSON.stringify(prediction || {})
+        JSON.stringify(prediction || {}),
+        event.executionStatus || null,
+        event.executionMode || null,
+        event.firewallRuleId || null,
+        event.executionError || null
       ]
     );
 
@@ -147,5 +156,30 @@ export async function checkDatabaseHealth() {
   } catch (err) {
     console.error('[PostgreSQL] Health check failed:', err);
     return false;
+  }
+}
+
+export async function getRecentActions() {
+  try {
+    const res = await pool.query(`
+      SELECT 
+        id, 
+        timestamp, 
+        source_ip, 
+        destination_ip, 
+        dqn_action, 
+        execution_status, 
+        execution_mode, 
+        firewall_rule_id, 
+        execution_error 
+      FROM security_events 
+      WHERE dqn_action IS NOT NULL 
+      ORDER BY timestamp DESC 
+      LIMIT 100
+    `);
+    return res.rows;
+  } catch (err) {
+    console.error('[PostgreSQL] Failed to fetch actions:', err);
+    throw err;
   }
 }
