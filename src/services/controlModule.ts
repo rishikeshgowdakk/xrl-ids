@@ -81,7 +81,8 @@ export class ProcessingControlModule {
         this.blockIpAddress(
           combinedEvent.flow.source_ip,
           `Autonomous DQN Block (Risk: ${(prediction.risk_score * 100).toFixed(0)}%)`,
-          'AUTOMATIC_RL'
+          'AUTOMATIC_RL',
+          combinedEvent.eventMode || 'live'
         );
       }
     }
@@ -90,10 +91,11 @@ export class ProcessingControlModule {
     if (prediction.risk_score > 0.5) {
       this.ipHistoryCount.set(combinedEvent.flow.source_ip, currentHistCount + 1);
     }
+    const eventMode = combinedEvent.eventMode || 'live';
 
     const event: ProcessedSecurityEvent = {
-      id: 'evt_' + Math.random().toString(36).substring(2, 9),
-      timestamp: Date.now(),
+      id: combinedEvent.id || 'evt_' + Math.random().toString(36).substring(2, 9),
+      timestamp: combinedEvent.timestamp || Date.now(),
       sourceIp: combinedEvent.flow.source_ip,
       destinationIp: combinedEvent.flow.destination_ip,
       protocol: combinedEvent.flow.protocol,
@@ -102,9 +104,10 @@ export class ProcessingControlModule {
       realFeatures: features,
       realFlow: combinedEvent.flow,
       actionExecuted,
-      isBlocked: isIpBlocked || actionExecuted === 'BLOCK',
+      isBlocked: false, // Native firewall execution is pending; do not pretend it's blocked.
       alertDispatched,
-      alertChannels
+      alertChannels,
+      eventMode
     };
 
     // 10. Database Logging & Time-Series Recording
@@ -164,6 +167,8 @@ export class ProcessingControlModule {
       if (response.ok) {
         const prediction = await response.json();
         return this.processPredictionEvent({
+          id: packet.id,
+          timestamp: packet.timestamp,
           type: 'prediction',
           flow: {
             source_ip: packet.sourceIp,
@@ -173,7 +178,8 @@ export class ProcessingControlModule {
             protocol: packet.protocol
           },
           features: pyFeatures,
-          prediction
+          prediction,
+          eventMode: packet.eventMode || 'live'
         });
       }
     } catch (e) {
@@ -224,7 +230,7 @@ export class ProcessingControlModule {
   public isIpBlocked(ip: string): boolean {
     const rule = this.firewallRules.get(ip);
     if (!rule) return false;
-    if (rule.status !== 'ACTIVE') return false;
+    if (rule.status === 'REVOKED' || rule.status === 'EXPIRED') return false;
     if (rule.expiresAt && rule.expiresAt < Date.now()) {
       rule.status = 'EXPIRED';
       return false;
@@ -235,8 +241,10 @@ export class ProcessingControlModule {
   public blockIpAddress(
     ip: string,
     reason: string,
-    ruleType: 'AUTOMATIC_RL' | 'MANUAL_ADMIN' = 'MANUAL_ADMIN'
+    ruleType: 'AUTOMATIC_RL' | 'MANUAL_ADMIN' = 'MANUAL_ADMIN',
+    eventMode: 'live' | 'simulation' = 'live'
   ): FirewallRule {
+    const status = eventMode === 'simulation' ? 'SIMULATION' : 'PENDING_EXECUTION';
     const rule: FirewallRule = {
       id: 'fw_' + Math.random().toString(36).substring(2, 8),
       ipAddress: ip,
@@ -244,9 +252,9 @@ export class ProcessingControlModule {
       blockedAt: Date.now(),
       expiresAt: ruleType === 'AUTOMATIC_RL' ? Date.now() + 10 * 60 * 1000 : null, // 10 min auto release
       ruleType,
-      packetsDropped: 1,
-      bytesPrevented: 1500,
-      status: 'ACTIVE'
+      packetsDropped: eventMode === 'simulation' ? 1 : 0,
+      bytesPrevented: eventMode === 'simulation' ? 1500 : 0,
+      status
     };
 
     this.firewallRules.set(ip, rule);
@@ -295,7 +303,8 @@ export class ProcessingControlModule {
             deviceInfo: getDeviceFingerprint(pkt.sourceIp),
             tcpFlags: pkt.tcpFlags,
             payloadSummary: pkt.summary,
-            simulatedLabel: 'BENIGN'
+            simulatedLabel: 'BENIGN',
+            eventMode: pkt.eventMode || 'simulation'
           };
           this.processIncomingPacket(rawPacket);
         }

@@ -15,7 +15,7 @@ export const AttackSimulator: React.FC = () => {
   const [burstCount, setBurstCount] = useState(1);
   const [statusMessage, setStatusMessage] = useState('');
 
-  const handleLaunchScenario = (type: AttackType, title: string) => {
+  const handleLaunchScenario = async (type: AttackType, title: string) => {
     let packetCount = 1;
     let customSize = 60;
     let customSyn = false;
@@ -44,7 +44,7 @@ export const AttackSimulator: React.FC = () => {
     }
 
     for (let i = 0; i < packetCount; i++) {
-      const pkt: RawPacket = {
+      const simPacket: RawPacket = {
         id: 'cust_' + Math.random().toString(36).substring(2, 8),
         timestamp: Date.now() + i * 50,
         sourceIp: '192.168.1.100', // standard test IP
@@ -61,19 +61,20 @@ export const AttackSimulator: React.FC = () => {
           psh: true
         },
         payloadSummary: `Simulated ${title} payload`,
-        simulatedLabel: type
+        simulatedLabel: type,
+        eventMode: 'simulation'
       };
-      controlModule.injectRawPacket(pkt);
+      await controlModule.injectRawPacket(simPacket);
     }
     
     setStatusMessage(`Triggered ${title} (${packetCount} simulated test packets injected into real ML API)!`);
     setTimeout(() => setStatusMessage(''), 4500);
   };
 
-  const handleInjectCustomPacket = (e: React.FormEvent) => {
+  const handleInjectCustomPacket = async (e: React.FormEvent) => {
     e.preventDefault();
     for (let i = 0; i < burstCount; i++) {
-      const pkt: RawPacket = {
+      const simPacket: RawPacket = {
         id: 'cust_' + Math.random().toString(36).substring(2, 8),
         timestamp: Date.now() + i * 50,
         sourceIp: customSrcIp.trim(),
@@ -89,10 +90,12 @@ export const AttackSimulator: React.FC = () => {
           rst: false,
           psh: true
         } : undefined,
-        payloadSummary: customPayload,
-        simulatedLabel: customFlagSyn && !customFlagAck ? 'DOS_SYN_FLOOD' : 'BENIGN'
+        payloadSummary: customFlagSyn && !customFlagAck ? 'Simulated DOS_SYN_FLOOD payload' : 'Simulated BENIGN payload',
+        simulatedLabel: customFlagSyn && !customFlagAck ? 'DOS_SYN_FLOOD' : 'BENIGN',
+        eventMode: 'simulation'
       };
-      controlModule.injectRawPacket(pkt);
+
+      await controlModule.injectRawPacket(simPacket);
     }
 
     setStatusMessage(`Injected ${burstCount} custom packet(s) from ${customSrcIp} into live Scapy ingestion engine.`);

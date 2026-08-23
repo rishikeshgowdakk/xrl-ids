@@ -107,7 +107,12 @@ export const EventDetailModal: React.FC<EventDetailModalProps> = ({ event, onClo
                 1 & 2. Raw Ingested Packet (Scapy Layer)
               </span>
               <div className="space-y-1 text-slate-700 font-mono text-[11px]">
-                <div>Source IP: <strong className="text-slate-900">{event.sourceIp}</strong></div>
+                <div className="flex items-center gap-2">
+                  Source IP: <strong className="text-slate-900">{event.sourceIp}</strong>
+                  {event.eventMode === 'simulation' && (
+                    <span className="text-[9px] bg-yellow-100 text-yellow-700 px-1 py-0.5 rounded font-bold tracking-wider">SIMULATION</span>
+                  )}
+                </div>
                 <div>Destination IP: <strong className="text-slate-900">{event.destinationIp}</strong></div>
                 <div>Protocol: <strong className="text-slate-900">{event.protocol}</strong></div>
                 <div>Packet Size: <strong className="text-slate-900">{event.rawPacket?.packetSize || realFeatures?.packet_length_mean} bytes</strong></div>

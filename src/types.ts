@@ -56,6 +56,7 @@ export interface RawPacket {
   };
   payloadSummary?: string;
   simulatedLabel?: AttackType;
+  eventMode?: 'live' | 'simulation';
 }
 
 export interface FlowFeatures {
@@ -229,6 +230,7 @@ export interface ProcessedSecurityEvent {
   isBlocked: boolean;
   alertDispatched: boolean;
   alertChannels?: ('EMAIL' | 'SMS' | 'WEBHOOK' | 'SOC_DASHBOARD')[];
+  eventMode?: 'live' | 'simulation';
 }
 
 export interface FirewallRule {
@@ -240,7 +242,7 @@ export interface FirewallRule {
   ruleType: 'AUTOMATIC_RL' | 'MANUAL_ADMIN';
   packetsDropped: number;
   bytesPrevented: number;
-  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED' | 'PENDING_EXECUTION' | 'SIMULATION';
 }
 
 export interface SystemMetrics {

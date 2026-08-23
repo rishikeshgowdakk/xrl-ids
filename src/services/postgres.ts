@@ -40,6 +40,7 @@ export async function initializeDatabase() {
         action_executed VARCHAR(20),
         is_blocked BOOLEAN,
         alert_dispatched BOOLEAN,
+        event_mode VARCHAR(20),
         raw_features JSONB,
         raw_prediction JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -91,8 +92,8 @@ export async function saveSecurityEventToDb(event: ProcessedSecurityEvent) {
         id, timestamp, flow_id, source_ip, destination_ip, protocol, attack_type, 
         risk_score, rf_probability, lstm_anomaly_score, dqn_action, q_allow, 
         q_alert, q_block, action_executed, is_blocked, alert_dispatched, 
-        raw_features, raw_prediction
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+        event_mode, raw_features, raw_prediction
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
       [
         event.id,
         event.timestamp,
@@ -111,6 +112,7 @@ export async function saveSecurityEventToDb(event: ProcessedSecurityEvent) {
         event.actionExecuted,
         event.isBlocked,
         event.alertDispatched,
+        event.eventMode || 'live',
         JSON.stringify(event.realFeatures || {}),
         JSON.stringify(prediction || {})
       ]

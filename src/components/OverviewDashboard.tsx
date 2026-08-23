@@ -532,8 +532,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                         {new Date(event.timestamp).toLocaleTimeString()}
                       </td>
                       <td className="p-3">
-                        <div className="font-mono text-slate-900 font-semibold">{event.sourceIp}</div>
-                        <div className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5">
+                        <div className="font-mono text-slate-900 font-semibold flex items-center gap-2">
+                          {event.sourceIp}
+                          {event.eventMode === 'simulation' && (
+                            <span className="text-[9px] bg-yellow-100 text-yellow-700 px-1 py-0.5 rounded font-bold tracking-wider">SIMULATION</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                           <Smartphone className="w-3 h-3 text-slate-400" />
                           <span>{devInfo?.deviceName || 'Standard LAN Host'}</span>
                         </div>

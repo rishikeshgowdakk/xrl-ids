@@ -134,11 +134,14 @@ export const FirewallActionView: React.FC<FirewallActionViewProps> = ({
         </div>
 
         {/* Multi-Channel Alert Dispatcher Simulator */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
-            <Bell className="w-4 h-4 text-slate-900" />
-            Alert Notification Channels (Email / SMS / Webhook)
-          </h3>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-slate-400" />
+              Alert Dispatch Simulator (SIMULATION)
+            </h3>
+            <span className="text-xs text-slate-400">Trigger test webhook endpoints</span>
+          </div>
           <p className="text-xs text-slate-500 mb-4">
             Automated alerts are published in real time whenever an attack is quarantined or high risk detected.
           </p>
@@ -169,25 +172,6 @@ export const FirewallActionView: React.FC<FirewallActionViewProps> = ({
                 {testAlertMessage}
               </div>
             )}
-
-            {/* Active Channels Badge List */}
-            <div className="grid grid-cols-3 gap-2 pt-2">
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <Mail className="w-4 h-4 text-slate-900 mx-auto mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800 block">Email Dispatch</span>
-                <span className="text-[10px] text-emerald-600 font-bold">READY</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <MessageSquare className="w-4 h-4 text-slate-900 mx-auto mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800 block">SMS Gateway</span>
-                <span className="text-[10px] text-emerald-600 font-bold">READY</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <Bell className="w-4 h-4 text-slate-900 mx-auto mb-1" />
-                <span className="text-[11px] font-semibold text-slate-800 block">SOC Webhook</span>
-                <span className="text-[10px] text-emerald-600 font-bold">ONLINE</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -229,8 +213,18 @@ export const FirewallActionView: React.FC<FirewallActionViewProps> = ({
               ) : (
                 firewallRules.map((rule) => (
                   <tr key={rule.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 font-mono font-bold text-rose-600">
-                      {rule.ipAddress}
+                    <td className="p-3">
+                      <div className="font-mono text-sm font-semibold text-slate-900">{rule.ipAddress}</div>
+                      {rule.ruleType === 'AUTOMATIC_RL' && (
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">
+                          AI-DRIVEN
+                        </span>
+                      )}
+                      {rule.reason.includes('SIMULATION') && (
+                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold">
+                          SIMULATION
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-slate-800 max-w-sm truncate">
                       {rule.reason}
@@ -246,19 +240,29 @@ export const FirewallActionView: React.FC<FirewallActionViewProps> = ({
                     <td className="p-3 font-mono text-slate-800 font-medium">
                       {rule.packetsDropped} dropped
                     </td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold font-mono text-[10px]">
-                        ACTIVE DROP
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                        rule.status === 'ACTIVE' 
+                          ? 'bg-red-100 text-red-700'
+                          : rule.status === 'PENDING_EXECUTION'
+                          ? 'bg-orange-100 text-orange-700'
+                          : rule.status === 'SIMULATION'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {rule.status === 'PENDING_EXECUTION' ? 'PENDING (NO FIREWALL)' : rule.status}
                       </span>
                     </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => handleUnblock(rule.ipAddress)}
-                        className="px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-medium border border-slate-200 transition flex items-center gap-1 ml-auto"
-                      >
-                        <Unlock className="w-3 h-3 text-emerald-600" />
-                        <span>Unblock</span>
-                      </button>
+                    <td className="px-4 py-3 text-slate-500 text-xs text-right whitespace-nowrap">
+                      {(rule.status === 'ACTIVE' || rule.status === 'PENDING_EXECUTION' || rule.status === 'SIMULATION') && (
+                        <button
+                          onClick={() => handleUnblock(rule.ipAddress)}
+                          className="px-2 py-1 text-red-600 hover:bg-red-50 rounded transition"
+                          title="Revoke Block Rule"
+                        >
+                          <Unlock className="w-4 h-4" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

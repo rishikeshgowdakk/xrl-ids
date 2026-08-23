@@ -88,6 +88,9 @@ export const ModelPipelineView: React.FC<ModelPipelineViewProps> = ({ events, se
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 font-mono">
               <span className="font-semibold">{currentEvent.sourceIp}:{currentEvent.rawPacket?.sourcePort || currentEvent.realFlow?.source_port || 'ANY'}</span>
+              {currentEvent.eventMode === 'simulation' && (
+                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold tracking-wider ml-2">SIMULATION</span>
+              )}
               <span className="text-slate-400">→</span>
               <span className="font-semibold">{currentEvent.destinationIp}:{currentEvent.rawPacket?.destinationPort || currentEvent.realFlow?.destination_port || 'ANY'}</span>
             </div>

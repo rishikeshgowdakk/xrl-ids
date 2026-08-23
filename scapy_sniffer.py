@@ -151,7 +151,8 @@ def prediction_worker():
                 "realFeatures": job["features"],
                 "actionExecuted": action,
                 "isBlocked": action == "BLOCK",
-                "alertDispatched": action == "ALERT"
+                "alertDispatched": action == "ALERT",
+                "eventMode": "live"
             }
 
             try:
@@ -170,7 +171,8 @@ def prediction_worker():
                 "type": "prediction",
                 "flow": job["flow_info"],
                 "features": job["features"],
-                "prediction": prediction
+                "prediction": prediction,
+                "eventMode": "live"
             }
 
             try:

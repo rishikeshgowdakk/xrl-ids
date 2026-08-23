@@ -87,7 +87,12 @@ export const RlDqnView: React.FC<RlDqnViewProps> = ({ events, selectedEvent, onS
             <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-700">Selected Flow</span>
               <span className="font-mono text-slate-900 font-bold">
-                {currentEvent?.sourceIp ? `${currentEvent.sourceIp} → ${currentEvent.destinationIp}` : 'N/A'}
+                <div className="flex items-center gap-2">
+                  {currentEvent?.sourceIp ? `${currentEvent.sourceIp} → ${currentEvent.destinationIp}` : 'N/A'}
+                  {currentEvent?.eventMode === 'simulation' && (
+                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold tracking-wider font-sans">SIMULATION</span>
+                  )}
+                </div>
               </span>
             </div>
           </div>
