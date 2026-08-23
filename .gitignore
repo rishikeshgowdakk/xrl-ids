@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+*.zip
+ml_engine/data/
+ml_engine/artifacts/
+__pycache__/
+venv/
+.venv/
