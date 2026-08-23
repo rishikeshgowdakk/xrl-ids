@@ -46,25 +46,13 @@ export class LanDeviceManager {
   }
 
   private loadFromStorage(): void {
-    // We intentionally ignore localStorage for devices and subnet now.
-    // The backend is the single source of truth for the active network.
     localStorage.removeItem(STORAGE_KEY_DEVICES);
     localStorage.removeItem(STORAGE_KEY_SUBNET);
-    
-    // We can still preserve myDeviceIp if we want, but it's safer to clear it 
-    // if the network changes. Let's just clear it.
     localStorage.removeItem(STORAGE_KEY_MY_DEVICE);
-
-    this.initDefaultHomePreset();
-  }
-
-  public initDefaultHomePreset(): void {
-    this.devices.clear();
-    this.notify();
     
     // Auto-trigger a scan on boot to populate from the real backend
     setTimeout(() => {
-      this.scanSubnet(() => {});
+      this.scanSubnet(() => {}).catch(console.error);
     }, 1000);
   }
 
@@ -233,78 +221,70 @@ export class LanDeviceManager {
     };
   }
 
-  /**
-   * Generates a random realistic MAC address (Removed as it is fake data)
-   */
-  public generateMacForVendor(vendor: string): string {
-    return '00:00:00:00:00:00'; // Should not be called
-  }
+
 
   /**
    * Real Subnet Scanner that queries the backend API for actual ARP table devices.
    */
   public async scanSubnet(
-    onProgress: (currentIp: string, percent: number, found: DeviceInfo[]) => void
+    onProgress: (status: string, found: DeviceInfo[]) => void
   ): Promise<DeviceInfo[]> {
     const discovered: DeviceInfo[] = [];
 
     try {
-      onProgress('Scanning ARP Table...', 10, []);
+      onProgress('Scanning LAN...', []);
       
-      const response = await fetch('/api/lan-devices');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch('/api/lan-devices', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('API failed');
       const data = await response.json();
-      const realDevices: {ip: string, mac: string, vendor?: string, isHost?: boolean, isGateway?: boolean}[] = data.devices || [];
-      const realPrefix: string = data.prefix;
       
-      if (realPrefix) {
-        this.subnetPrefix = realPrefix.replace(/\.$/, '');
+      if (!data.success) {
+        throw new Error(data.error || 'Unknown scan error');
       }
 
-      onProgress('Parsing Real Devices...', 50, []);
-
-      // Remove stale devices not present in the new realDevices array
-      const realIps = new Set(realDevices.map(d => d.ip));
-      for (const ip of Array.from(this.devices.keys())) {
-        if (!realIps.has(ip)) {
-          this.devices.delete(ip);
-        }
+      const realDevices: {ip: string, mac: string, vendor?: string, isHost?: boolean, isGateway?: boolean, source?: string}[] = data.devices || [];
+      const realSubnet: string = data.subnet;
+      
+      if (realSubnet) {
+        this.subnetPrefix = realSubnet;
       }
+
+      onProgress('Parsing Real Devices...', []);
+
+      this.devices.clear();
 
       realDevices.forEach((dev, index) => {
-        const existing = this.devices.get(dev.ip);
-        if (existing) {
-          existing.isMyDevice = !!dev.isHost;
-          if (dev.isHost) this.myDeviceIp = dev.ip;
-          if (dev.isGateway) existing.deviceType = 'Server / Gateway';
-          existing.deviceName = dev.isHost ? 'My Device (This Host)' : (dev.isGateway ? 'Gateway / Router' : existing.deviceName);
-          discovered.push(existing);
-        } else {
-          const newDev: DeviceInfo = {
-            ipAddress: dev.ip,
-            macAddress: dev.mac.toUpperCase(),
-            vendor: dev.vendor || 'Unknown',
-            deviceName: dev.isHost ? 'My Device (This Host)' : (dev.isGateway ? 'Gateway / Router' : (dev.vendor && dev.vendor !== 'Unknown' ? dev.vendor + ' Device' : 'Unknown Device')),
-            deviceType: dev.isHost ? 'Laptop / PC' : (dev.isGateway ? 'Server / Gateway' : 'IoT Device'),
-            operatingSystem: 'Unknown OS',
-            dhcpHostname: `Unknown`,
-            networkSegment: 'Real LAN Subnet',
-            ttlFingerprint: 64,
-            lastSeen: Date.now(),
-            isCustomHomeDevice: true,
-            isMyDevice: !!dev.isHost
-          };
-          if (dev.isHost) this.myDeviceIp = dev.ip;
-          this.devices.set(dev.ip, newDev);
-          discovered.push(newDev);
-        }
-        onProgress(dev.ip, 50 + Math.round((index / realDevices.length) * 50), [...discovered]);
+        const newDev: DeviceInfo = {
+          ipAddress: dev.ip,
+          macAddress: dev.mac || 'Unknown',
+          vendor: dev.vendor || 'Unknown',
+          deviceName: dev.isHost ? 'Host Machine' : (dev.isGateway ? 'Gateway' : 'Unknown'),
+          deviceType: dev.isHost ? 'Laptop / PC' : (dev.isGateway ? 'Server / Gateway' : 'IoT Device'),
+          operatingSystem: 'Unknown',
+          dhcpHostname: `Unknown`,
+          networkSegment: data.subnet || 'Unknown',
+          ttlFingerprint: 64,
+          lastSeen: Date.now(),
+          isCustomHomeDevice: false,
+          isMyDevice: !!dev.isHost,
+          isGateway: !!dev.isGateway,
+          source: dev.source || 'Unknown'
+        };
+        if (dev.isHost) this.myDeviceIp = dev.ip;
+        this.devices.set(dev.ip, newDev);
+        discovered.push(newDev);
+        onProgress(`Processing ${dev.ip}...`, [...discovered]);
       });
       
-      onProgress('Scan Complete', 100, discovered);
+      onProgress('Scan Complete', discovered);
     } catch (err) {
       console.error('Failed to run real LAN scan:', err);
-      // Fallback or error state
+      this.notify();
+      throw err;
     }
 
     this.notify();

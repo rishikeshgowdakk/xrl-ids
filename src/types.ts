@@ -32,6 +32,9 @@ export interface DeviceInfo {
   isMyDevice?: boolean;
   isCustomHomeDevice?: boolean;
   rssiSignalDbm?: number;
+  source?: string;
+  isHost?: boolean;
+  isGateway?: boolean;
 }
 
 export interface RawPacket {

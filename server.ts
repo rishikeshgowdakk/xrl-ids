@@ -212,27 +212,34 @@ async function startServer() {
       }
 
       let stdout = '';
+      let scanError = '';
       try {
-        const result = await execAsync(`sudo arp-scan --interface=${iface} --localnet`);
+        const result = await execAsync(`sudo -n arp-scan --interface=${iface} --localnet`, { timeout: 15000, killSignal: 'SIGKILL' });
         stdout = result.stdout;
-      } catch (e) {
-        console.warn('sudo arp-scan failed (probably needs password). Falling back to arp -a cache.');
-        const result = await execAsync(`arp -a`);
-        stdout = result.stdout;
+      } catch (e: any) {
+        console.warn('sudo arp-scan failed or timed out:', e.message);
+        return res.status(500).json({ 
+          success: false, 
+          scanType: "active-arp",
+          error: "Active LAN scan requires arp-scan with appropriate privileges. No cached-device fallback was used." 
+        });
       }
 
       const lines = stdout.split('\n');
       const devices = [];
       
       const newlyTracked: string[] = [];
+      const subnet = prefix ? `${prefix}0/24` : 'Unknown';
 
-      // Add Host machine explicitly, as arp-scan doesn't return the local interface
+      // Add Host machine explicitly from OS network interfaces
       if (hostIp && prefix && hostIp.startsWith(prefix)) {
         devices.push({ 
           ip: hostIp, 
-          mac: hostMac, 
+          mac: hostMac || 'Unknown', 
           vendor: 'Host Machine', 
-          isHost: true 
+          isGateway: hostIp === gatewayIp,
+          isHost: true,
+          source: 'os-interface'
         });
         newlyTracked.push(hostIp);
       }
@@ -242,18 +249,12 @@ async function startServer() {
         let mac = null;
         let vendor = 'Unknown';
         
-        // Example arp-scan: 192.168.0.1    00:11:22:33:44:55    Apple, Inc.
         const arpScanMatch = line.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([0-9a-fA-F:-]+)(?:\s+(.*))?/);
-        // Example arp -a: ? (192.168.0.1) at 00:11:22:33:44:55 [ether] on wlo1
-        const arpCacheMatch = line.match(/\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)\s+at\s+([0-9a-fA-F:-]+)/);
 
         if (arpScanMatch) {
           ip = arpScanMatch[1];
           mac = arpScanMatch[2];
           vendor = arpScanMatch[3] || 'Unknown';
-        } else if (arpCacheMatch) {
-          ip = arpCacheMatch[1];
-          mac = arpCacheMatch[2];
         }
 
         if (ip && mac) {
@@ -261,8 +262,10 @@ async function startServer() {
             devices.push({ 
               ip, 
               mac, 
-              vendor, 
-              isGateway: ip === gatewayIp 
+              vendor: vendor.trim(), 
+              isGateway: ip === gatewayIp,
+              isHost: false,
+              source: 'arp-scan'
             });
             newlyTracked.push(ip);
           }
@@ -277,10 +280,17 @@ async function startServer() {
         }
       }
 
-      res.json({ devices, prefix, hostIp, gatewayIp });
-    } catch (error) {
+      res.json({ 
+        success: true,
+        interface: iface,
+        subnet,
+        hostIp, 
+        gatewayIp,
+        devices
+      });
+    } catch (error: any) {
       console.error('Error scanning LAN:', error);
-      res.status(500).json({ error: 'Failed to scan LAN devices.' });
+      res.status(500).json({ success: false, error: 'Failed to scan LAN devices.' });
     }
   });
 
