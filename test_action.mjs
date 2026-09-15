@@ -17,13 +17,13 @@ async function testAction(action, ip = '192.168.0.100') {
       }
     }
   };
-  
+
   const res = await fetch('http://127.0.0.1:3000/api/db/events', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event)
   });
-  
+
   console.log(`Status: ${res.status}`);
 }
 
@@ -31,4 +31,4 @@ await testAction('ALLOW');
 await testAction('ALERT');
 await testAction('BLOCK');
 await testAction('BLOCK', 'invalid_ip'); // Invalid IP
-await testAction('BLOCK', '127.0.0.1'); // Host IP guard
+await testAction('BLOCK', '127.0.0.1'); // Host IP guards
